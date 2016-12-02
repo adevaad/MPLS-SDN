@@ -51,7 +51,7 @@ class MplsController(app_manager.RyuApp):
 
     def __init__(self, *args, **kwargs):
         super(MplsController, self).__init__(*args, **kwargs)
-        # self.mac_to_port = {}
+        self.mac_to_port = {}
 
    # Packets decoder
     def packet_print(self, pkt):
@@ -186,7 +186,8 @@ class MplsController(app_manager.RyuApp):
         mod = parser.OFPFlowMod(table_id=0,datapath=datapath, priority=priority,out_port=0,out_group=0,match=match, flags=1, instructions=inst)
 
         datapath.send_msg(mod)
-    """
+
+
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
         datapath = ev.msg.datapath
@@ -219,7 +220,16 @@ class MplsController(app_manager.RyuApp):
             mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
                                     match=match, instructions=inst)
         datapath.send_msg(mod)
-    """
+
+    def host_id_from_ip(self, addr):
+        return int(addr[-1])# - '0'
+
+    def edge_switch(self, switch_id):
+        return switch_id in [1, 2, 3, 4]
+
+    # get the last digit of dpip
+    def switch_id_from_dpip(self, dpid):
+        return dpid % 16
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
@@ -249,6 +259,33 @@ class MplsController(app_manager.RyuApp):
         # self.mac_to_port.setdefault(dpid, {})
 
         self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
+
+
+        src_host_id = self.host_id_from_ip(src)
+        switch_id = self.switch_id_from_dpip(dpid)
+        print("src: ", src_host_id)
+        print("switch: ", switch_id)
+
+        if self.edge_switch(switch_id):
+            if src_host_id == switch_id:
+                print("edge")
+                #self.push_mpls_flow()
+                return
+            else:
+                print("middle")
+                #self.pop_mpls_flow
+                return
+
+        # normal switch
+        # just forward the packet
+        # match label & forward packet
+
+
+
+
+
+
+
 
         return
 
