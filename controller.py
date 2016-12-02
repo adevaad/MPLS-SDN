@@ -188,6 +188,38 @@ class MplsController(app_manager.RyuApp):
         datapath.send_msg(mod)
 
 
+    def flow_match(self, datapath, in_port=None, label=None):   #dl_dst=None, dl_src=None, dl_type=None, ip_proto=None, ipv6_src=None, ipv6_dst=None):
+        match = datapath.ofproto_parser.OFPMatch()
+        if in_port is not None:
+            match.set_in_port(in_port)
+
+        """
+        if dl_dst is not None:
+            dl_dst = mac.haddr_to_bin(dl_dst)
+            match.set_dl_dst(dl_dst)
+
+        if dl_src is not None:
+            dl_src = mac.haddr_to_bin(dl_src)
+            match.set_dl_src(dl_src)
+
+        if dl_type is not None:
+            match.set_dl_type(dl_type)
+
+        if ip_proto is not None:
+            match.set_ip_proto(ip_proto)
+
+        if ipv4_src is not None:
+            ipv4_src = self.ipv4_to_int(ipv4_src)
+            match.set_ipv4_src(ipv4_src)
+
+        if ipv4_dst is not None:
+            ipv4_dst = self.ipv4_to_int(ipv4_dst)
+            match.set_ipv4_dst(ipv4_dst)
+        """
+
+        return match
+
+
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
         datapath = ev.msg.datapath
@@ -256,7 +288,16 @@ class MplsController(app_manager.RyuApp):
         self.packet_print(pkt)
 
         dpid = datapath.id
-        # self.mac_to_port.setdefault(dpid, {})
+
+        self.mac_to_port.setdefault(dpid, {})
+
+        self.mac_to_port[dpid][src] = in_port
+
+        if dst in self.mac_to_port[dpid]:
+            out_port = self.mac_to_port[dpid][dst]
+        else:
+            out_port = ofproto.OFPP_FLOOD
+
 
         self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
 
@@ -266,14 +307,31 @@ class MplsController(app_manager.RyuApp):
         print("src: ", src_host_id)
         print("switch: ", switch_id)
 
+        """
+        if dst in self.mac_to_port[dpid]:
+            out_port = self.mac_to_port[dpid][dst]
+        else:
+            out_port = ofproto.OFPP_FLOOD
+        """
+
+
         if self.edge_switch(switch_id):
+            match = self.flow_match(datapath, in_port=in_port, label=None)
             if src_host_id == switch_id:
                 print("edge")
                 #self.push_mpls_flow()
+                mpls_label = src_host_id
+                mpls_tc = 2
+                mpls_ttl = 30
+
+                self.push_mpls_flow(datapath, priority=20, match=match, mpls_label=mpls_label, mpls_tc=mpls_tc, mpls_ttl=mpls_ttl, out_port=2)#out_port)
+                # self.push_mpls_flow(datapath, priority=10, match=match, mpls_label=mpls_label, mpls_tc=mpls_tc, mpls_ttl=mpls_ttl, out_port=3)#out_port)
+
                 return
             else:
                 print("middle")
-                #self.pop_mpls_flow
+                self.pop_mpls_flow(datapath, priority=10, match=match, out_port=1)
+                 #self.pop_mpls_flow
                 return
 
         # normal switch
